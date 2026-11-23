@@ -4,7 +4,7 @@
 который собирается, тестируется и упаковывается в Docker-образ автоматически в GitHub Actions,
 а образ публикуется в GitHub Container Registry (GHCR).
 
-[![CI/CD](https://github.com/OWNER/task-tracker/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/OWNER/task-tracker/actions/workflows/ci-cd.yml)
+[![CI/CD](https://github.com/Lekko8/mifi_vo_HW/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/Lekko8/mifi_vo_HW/actions/workflows/ci-cd.yml)
 
 ## Стек
 
@@ -56,11 +56,11 @@ docker run --rm -p 8080:8080 task-tracker:local
 
 ## Образ в GHCR
 
-Замена `OWNER` на владельца репозитория (владелец и имя образа всегда в нижнем регистре):
+Имя пакета в GHCR — это имя репозитория в нижнем регистре: `ghcr.io/lekko8/mifi_vo_hw`.
 
 ```bash
-docker pull ghcr.io/OWNER/task-tracker:latest
-docker run -d --rm --name task-tracker -p 8080:8080 ghcr.io/OWNER/task-tracker:latest
+docker pull ghcr.io/lekko8/mifi_vo_hw:latest
+docker run -d --rm --name task-tracker -p 8080:8080 ghcr.io/lekko8/mifi_vo_hw:latest
 
 curl http://localhost:8080/actuator/health     # {"status":"UP"}
 curl http://localhost:8080/api/info
@@ -71,7 +71,7 @@ curl -X POST http://localhost:8080/api/tasks \
 Если пакет приватный, нужен вход в GHCR с personal access token (scope `read:packages`):
 
 ```bash
-echo "$GHCR_TOKEN" | docker login ghcr.io -u OWNER --password-stdin
+echo "$GHCR_TOKEN" | docker login ghcr.io -u lekko8 --password-stdin
 ```
 
 ## Тегирование образа
@@ -103,6 +103,7 @@ echo "$GHCR_TOKEN" | docker login ghcr.io -u OWNER --password-stdin
 ├── .github/workflows/ci-cd.yml   # пайплайн: сборка, тесты, артефакт, Docker, GHCR
 ├── Dockerfile                    # multistage: build -> runtime
 ├── pom.xml
+├── docs/report/                  # PDF-отчёты по ДЗ 1 и ДЗ 2 + скрипт генерации
 ├── src/main/java/com/example/tasktracker/
 │   ├── api/                      # контроллеры и обработчик ошибок
 │   ├── model/                    # Task, TaskRequest, TaskNotFoundException

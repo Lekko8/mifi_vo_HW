@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """
-Генерация PDF-отчётов по домашним заданиям № 1 и № 2.
+Генерация PDF-отчётов по домашним заданиям № 1 и № 2 (компактная версия).
 
 Запуск:  python build_reports.py
-Опционально:
-    set REPO_URL=https://github.com/user/repo
-    set REPORT_AUTHOR=Иванов И. И.
-    set REPORT_GROUP=Группа 123
 """
 
 import os
@@ -16,7 +12,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -41,24 +37,23 @@ from reportlab.platypus import (
 ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = Path(__file__).resolve().parent
 
-REPO_URL = os.environ.get("REPO_URL", "https://github.com/OWNER/task-tracker")
-AUTHOR = os.environ.get("REPORT_AUTHOR", "______________________________")
-GROUP = os.environ.get("REPORT_GROUP", "______________________________")
+REPO_URL = "https://github.com/Lekko8/mifi_vo_HW"
+IMAGE = "ghcr.io/lekko8/mifi_vo_hw"
 REPORT_DATE = os.environ.get("REPORT_DATE", "23 ноября 2026 г.")
 
 WORKFLOW_FILE = ROOT / ".github" / "workflows" / "ci-cd.yml"
 DOCKERFILE = ROOT / "Dockerfile"
-POM = ROOT / "pom.xml"
 
 PAGE_W, PAGE_H = A4
 MARGIN_L, MARGIN_R = 20 * mm, 18 * mm
-MARGIN_T, MARGIN_B = 20 * mm, 18 * mm
+MARGIN_T, MARGIN_B = 18 * mm, 16 * mm
 CONTENT_W = PAGE_W - MARGIN_L - MARGIN_R
 
 ACCENT = colors.HexColor("#1f4f9c")
 GREY = colors.HexColor("#5b6472")
 LIGHT = colors.HexColor("#eef2f9")
 BORDER = colors.HexColor("#d5dce7")
+CODE_BG = colors.HexColor("#f7f9fc")
 
 # --------------------------------------------------------------------------- fonts
 
@@ -66,33 +61,18 @@ FONT_DIR = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
 
 
 def register_fonts() -> None:
-    candidates = {
-        "Arial": ["arial.ttf", "DejaVuSans.ttf"],
-        "Arial-Bold": ["arialbd.ttf", "DejaVuSans-Bold.ttf"],
-        "Consolas": ["consola.ttf", "DejaVuSansMono.ttf"],
-    }
-    fallback = {"Arial": "Helvetica", "Arial-Bold": "Helvetica-Bold", "Consolas": "Courier"}
-    registered = {}
-    for name, files in candidates.items():
-        for candidate in files:
-            path = FONT_DIR / candidate
-            if path.exists():
-                pdfmetrics.registerFont(TTFont(name, str(path)))
-                registered[name] = True
-                break
-    if "Arial" not in registered:
-        sys.exit("Не найден шрифт с поддержкой кириллицы (arial.ttf / DejaVuSans.ttf)")
-    if "Arial-Bold" not in registered:
-        pdfmetrics.registerFont(TTFont("Arial-Bold", str(FONT_DIR / "arial.ttf")))
-    if "Consolas" not in registered:
-        pdfmetrics.registerFont(TTFont("Consolas", str(FONT_DIR / "arial.ttf")))
+    faces = {"Arial": "arial.ttf", "Arial-Bold": "arialbd.ttf", "Consolas": "consola.ttf"}
+    for name, filename in faces.items():
+        path = FONT_DIR / filename
+        if not path.exists():
+            sys.exit(f"Не найден шрифт {path}")
+        pdfmetrics.registerFont(TTFont(name, str(path)))
     pdfmetrics.registerFontFamily(
         "Arial", normal="Arial", bold="Arial-Bold", italic="Arial", boldItalic="Arial-Bold"
     )
     pdfmetrics.registerFontFamily(
         "Consolas", normal="Consolas", bold="Consolas", italic="Consolas", boldItalic="Consolas"
     )
-    return fallback
 
 
 # --------------------------------------------------------------------------- styles
@@ -102,71 +82,57 @@ S = {}
 
 def init_styles() -> None:
     S["title"] = ParagraphStyle(
-        "title", fontName="Arial-Bold", fontSize=20, leading=26, textColor=ACCENT,
-        alignment=TA_LEFT, spaceAfter=6,
+        "title", fontName="Arial-Bold", fontSize=18, leading=23, textColor=ACCENT, spaceAfter=5,
     )
     S["subtitle"] = ParagraphStyle(
-        "subtitle", fontName="Arial", fontSize=12, leading=17, textColor=GREY, spaceAfter=14,
+        "subtitle", fontName="Arial", fontSize=10.5, leading=15, textColor=GREY, spaceAfter=10,
     )
     S["kicker"] = ParagraphStyle(
-        "kicker", fontName="Arial-Bold", fontSize=9.5, leading=13, textColor=ACCENT,
-        spaceAfter=4,
+        "kicker", fontName="Arial-Bold", fontSize=9, leading=12, textColor=ACCENT, spaceAfter=3,
     )
     S["h1"] = ParagraphStyle(
-        "h1", fontName="Arial-Bold", fontSize=14, leading=18, textColor=ACCENT,
-        spaceBefore=14, spaceAfter=6, keepWithNext=1,
+        "h1", fontName="Arial-Bold", fontSize=13, leading=17, textColor=ACCENT,
+        spaceBefore=11, spaceAfter=4, keepWithNext=1,
     )
     S["h2"] = ParagraphStyle(
-        "h2", fontName="Arial-Bold", fontSize=11.5, leading=15, textColor=colors.HexColor("#20304a"),
-        spaceBefore=10, spaceAfter=4, keepWithNext=1,
+        "h2", fontName="Arial-Bold", fontSize=10.8, leading=14,
+        textColor=colors.HexColor("#20304a"), spaceBefore=8, spaceAfter=3, keepWithNext=1,
     )
     S["body"] = ParagraphStyle(
-        "body", fontName="Arial", fontSize=10, leading=15, alignment=TA_JUSTIFY,
-        textColor=colors.HexColor("#1b2432"), spaceAfter=6,
+        "body", fontName="Arial", fontSize=9.8, leading=13.8, alignment=TA_JUSTIFY,
+        textColor=colors.HexColor("#1b2432"), spaceAfter=5,
     )
     S["bullet"] = ParagraphStyle(
-        "bullet", parent=S["body"], leftIndent=14, bulletIndent=4, spaceAfter=3,
+        "bullet", parent=S["body"], leftIndent=13, bulletIndent=3, spaceAfter=2,
     )
     S["note"] = ParagraphStyle(
-        "note", parent=S["body"], fontSize=9, leading=13, textColor=GREY,
-    )
-    S["code"] = ParagraphStyle(
-        "code", fontName="Consolas", fontSize=7.3, leading=9.2,
-        textColor=colors.HexColor("#14202e"), backColor=colors.HexColor("#f7f9fc"),
-        borderColor=BORDER, borderWidth=0.6, borderPadding=(6, 7, 6, 7),
-        leftIndent=6, spaceBefore=4, spaceAfter=8,
+        "note", parent=S["body"], fontSize=8.8, leading=12.5, textColor=GREY,
+        leftIndent=13, bulletIndent=3,
     )
     S["code_line"] = ParagraphStyle(
-        "code_line", fontName="Consolas", fontSize=7.3, leading=9.3,
+        "code_line", fontName="Consolas", fontSize=7.2, leading=8.9,
         textColor=colors.HexColor("#14202e"),
     )
-    S["caption"] = ParagraphStyle(
-        "caption", fontName="Arial", fontSize=8.5, leading=11, textColor=GREY,
-        alignment=TA_CENTER, spaceBefore=4, spaceAfter=10,
-    )
     S["th"] = ParagraphStyle(
-        "th", fontName="Arial-Bold", fontSize=8.5, leading=11, textColor=colors.HexColor("#20304a"),
+        "th", fontName="Arial-Bold", fontSize=8.3, leading=10.5, textColor=colors.HexColor("#20304a"),
     )
     S["td"] = ParagraphStyle(
-        "td", fontName="Arial", fontSize=8.5, leading=11.5, textColor=colors.HexColor("#1b2432"),
+        "td", fontName="Arial", fontSize=8.3, leading=11, textColor=colors.HexColor("#1b2432"),
     )
-    S["td_mono"] = ParagraphStyle("td_mono", parent=S["td"], fontName="Consolas", fontSize=8)
+    S["td_mono"] = ParagraphStyle("td_mono", parent=S["td"], fontName="Consolas", fontSize=7.9)
     S["meta_key"] = ParagraphStyle(
-        "meta_key", fontName="Arial-Bold", fontSize=9.5, leading=14, textColor=GREY,
+        "meta_key", fontName="Arial-Bold", fontSize=9, leading=13, textColor=GREY,
     )
-    S["meta_val"] = ParagraphStyle(
-        "meta_val", fontName="Arial", fontSize=9.5, leading=14,
-    )
+    S["meta_val"] = ParagraphStyle("meta_val", fontName="Arial", fontSize=9, leading=13)
 
 
 # --------------------------------------------------------------------------- helpers
 
 
 def rich(text: str) -> str:
-    """Экранирует текст и поддерживает **жирный** и `моноширинный`."""
     value = escape(text)
     value = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", value)
-    value = re.sub(r"`(.+?)`", r'<font name="Consolas" size="8.6">\1</font>', value)
+    value = re.sub(r"`(.+?)`", r'<font name="Consolas" size="8.3">\1</font>', value)
     return value
 
 
@@ -174,28 +140,22 @@ def p(text: str) -> Paragraph:
     return Paragraph(rich(text), S["body"])
 
 
-def note(text: str) -> Paragraph:
-    return Paragraph(rich(text), S["note"])
-
-
 def h1(text: str, number: str | None = None) -> Paragraph:
-    prefix = f"{number}. " if number else ""
-    return Paragraph(rich(prefix + text), S["h1"])
+    return Paragraph(rich((f"{number}. " if number else "") + text), S["h1"])
 
 
 def h2(text: str, number: str | None = None) -> Paragraph:
-    prefix = f"{number} " if number else ""
-    return Paragraph(rich(prefix + text), S["h2"])
+    return Paragraph(rich((f"{number} " if number else "") + text), S["h2"])
 
 
-def bullets(items: list[str], style=None) -> list[Paragraph]:
-    return [Paragraph(rich(item), style or S["bullet"], bulletText="•") for item in items]
+def bullets(items: list[str]) -> list[Paragraph]:
+    return [Paragraph(rich(item), S["bullet"], bulletText="•") for item in items]
 
 
-def code_block(text: str, max_lines: int | None = None, size: float | None = None) -> list[Flowable]:
-    """Моноширинный блок: переносит длинные строки и корректно разбивается по страницам."""
+def code_block(text: str) -> list[Flowable]:
+    """Моноширинный блок: переносит длинные строки и разбивается по страницам построчно."""
     wrapped = []
-    limit = 108 if size is None else int(108 * 7.3 / size)
+    limit = 108
     for line in text.replace("\r\n", "\n").replace("\t", "    ").rstrip("\n").split("\n"):
         if len(line) <= limit:
             wrapped.append(line if line.strip() else " ")
@@ -215,18 +175,18 @@ def code_block(text: str, max_lines: int | None = None, size: float | None = Non
     block.setStyle(
         TableStyle(
             [
-                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f7f9fc")),
+                ("BACKGROUND", (0, 0), (-1, -1), CODE_BG),
                 ("BOX", (0, 0), (-1, -1), 0.6, BORDER),
                 ("LEFTPADDING", (0, 0), (-1, -1), 9),
                 ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-                ("TOPPADDING", (0, 0), (-1, -1), 0.4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 0.4),
-                ("TOPPADDING", (0, 0), (-1, 0), 6),
-                ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 0.3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 0.3),
+                ("TOPPADDING", (0, 0), (-1, 0), 5),
+                ("BOTTOMPADDING", (0, -1), (-1, -1), 5),
             ]
         )
     )
-    return [Spacer(1, 2), block, Spacer(1, 9)]
+    return [Spacer(1, 2), block, Spacer(1, 7)]
 
 
 def table(rows: list[list[str]], widths: list[float], mono_col: int | None = None) -> Table:
@@ -251,20 +211,20 @@ def table(rows: list[list[str]], widths: list[float], mono_col: int | None = Non
                 ("BACKGROUND", (0, 1), (-1, -1), colors.white),
                 ("GRID", (0, 0), (-1, -1), 0.5, BORDER),
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5),
-                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4.5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4.5),
+                ("TOPPADDING", (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
             ]
         )
     )
-    return t
+    # Таблица переносится на следующую страницу целиком: одна «оторванная» строка
+    # под заголовком выглядит хуже, чем небольшой отступ внизу страницы.
+    return KeepTogether(t)
 
 
 class ScreenshotBox(Flowable):
-    """Рамка-заглушка под скриншот."""
-
-    def __init__(self, caption: str, height: float = 200):
+    def __init__(self, caption: str, height: float = 190):
         super().__init__()
         self.caption = caption
         self.box_height = height
@@ -305,8 +265,8 @@ class ScreenshotBox(Flowable):
         canvas.restoreState()
 
 
-def screenshot(caption: str, height: float = 200) -> list[Flowable]:
-    return [ScreenshotBox(caption, height), Spacer(1, 8)]
+def screenshot(caption: str, height: float = 190) -> list[Flowable]:
+    return [ScreenshotBox(caption, height), Spacer(1, 10)]
 
 
 def meta_table(pairs: list[tuple[str, str]]) -> Table:
@@ -314,13 +274,13 @@ def meta_table(pairs: list[tuple[str, str]]) -> Table:
         [Paragraph(rich(key), S["meta_key"]), Paragraph(rich(value), S["meta_val"])]
         for key, value in pairs
     ]
-    t = Table(rows, colWidths=[38 * mm, CONTENT_W - 38 * mm], hAlign="LEFT")
+    t = Table(rows, colWidths=[34 * mm, CONTENT_W - 34 * mm], hAlign="LEFT")
     t.setStyle(
         TableStyle(
             [
                 ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("TOPPADDING", (0, 0), (-1, -1), 3),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 2.5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3.5),
                 ("LINEBELOW", (0, 0), (-1, -2), 0.4, colors.HexColor("#e6ebf3")),
             ]
         )
@@ -338,7 +298,6 @@ def rule() -> Table:
 
 
 def flatten(items: list) -> list[Flowable]:
-    """Разворачивает вложенные списки flowable'ов (упрощает сборку story)."""
     result: list[Flowable] = []
     for item in items:
         if isinstance(item, (list, tuple)):
@@ -358,7 +317,6 @@ def build_document(filename: str, doc_title: str, story: list[Flowable]) -> Path
         topMargin=MARGIN_T,
         bottomMargin=MARGIN_B,
         title=doc_title,
-        author=AUTHOR,
         subject="Домашнее задание по CI/CD",
         creator="build_reports.py",
     )
@@ -370,13 +328,13 @@ def build_document(filename: str, doc_title: str, story: list[Flowable]) -> Path
         canvas.saveState()
         canvas.setStrokeColor(colors.HexColor("#e3e8f0"))
         canvas.setLineWidth(0.6)
-        canvas.line(MARGIN_L, PAGE_H - 14 * mm, PAGE_W - MARGIN_R, PAGE_H - 14 * mm)
-        canvas.setFont("Arial", 7.8)
+        canvas.line(MARGIN_L, PAGE_H - 12.5 * mm, PAGE_W - MARGIN_R, PAGE_H - 12.5 * mm)
+        canvas.setFont("Arial", 7.6)
         canvas.setFillColor(GREY)
-        canvas.drawString(MARGIN_L, PAGE_H - 12.5 * mm, doc_title)
-        canvas.line(MARGIN_L, 13 * mm, PAGE_W - MARGIN_R, 13 * mm)
-        canvas.drawString(MARGIN_L, 10.5 * mm, "Task Tracker · CI/CD в GitHub Actions")
-        canvas.drawRightString(PAGE_W - MARGIN_R, 10.5 * mm, f"стр. {doc_obj.page}")
+        canvas.drawString(MARGIN_L, PAGE_H - 11 * mm, doc_title)
+        canvas.line(MARGIN_L, 11.5 * mm, PAGE_W - MARGIN_R, 11.5 * mm)
+        canvas.drawString(MARGIN_L, 9 * mm, "Task Tracker · CI/CD в GitHub Actions")
+        canvas.drawRightString(PAGE_W - MARGIN_R, 9 * mm, f"стр. {doc_obj.page}")
         canvas.restoreState()
 
     doc.addPageTemplates([PageTemplate(id="main", frames=[frame], onPage=decorate)])
@@ -384,22 +342,56 @@ def build_document(filename: str, doc_title: str, story: list[Flowable]) -> Path
     return path
 
 
-def title_page(kicker: str, title: str, subtitle: str, meta: list[tuple[str, str]]) -> list[Flowable]:
+def title_page(
+    kicker: str,
+    title: str,
+    subtitle: str,
+    meta: list[tuple[str, str]],
+    contents: list[str] | None = None,
+) -> list[Flowable]:
     flows: list[Flowable] = [
-        Spacer(1, 26 * mm),
+        Spacer(1, 22 * mm),
         Paragraph(rich(kicker), S["kicker"]),
         Paragraph(rich(title), S["title"]),
         Paragraph(rich(subtitle), S["subtitle"]),
         rule(),
-        Spacer(1, 14 * mm),
+        Spacer(1, 10 * mm),
         meta_table(meta),
-        Spacer(1, 18 * mm),
+        Spacer(1, 8 * mm),
     ]
+    if contents:
+        flows.append(Paragraph(rich("В отчёте:"), S["meta_key"]))
+        flows.append(Spacer(1, 2))
+        flows.extend(Paragraph(rich(item), S["note"]) for item in contents)
     return flows
 
 
 def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+PIPELINE_DIAGRAM = """  push / pull_request / tag / manual
+             │
+             ▼
+   ┌──────────────────────────────────────────┐
+   │ job: build-and-test                      │
+   │  1. actions/checkout@v4                  │
+   │  2. actions/setup-java@v4 (cache: maven) │
+   │  3. mvn -B -ntp verify  → 13 тестов      │
+   │  4. actions/upload-artifact@v4 (jar)     │
+   └───────────────────┬──────────────────────┘
+                       │ needs
+                       ▼  (любое событие, кроме pull_request)
+   ┌──────────────────────────────────────────┐
+   │ job: docker                              │
+   │  5. docker/setup-buildx-action@v3        │
+   │  6. docker/login-action@v3 → ghcr.io     │
+   │  7. docker/metadata-action@v5 (теги)     │
+   │  8. docker/build-push-action@v6 (cache)  │
+   └───────────────────┬──────────────────────┘
+                       ▼
+         ghcr.io/lekko8/mifi_vo_hw:latest,
+         :sha-<commit>, :1.0.0 (по git-тегу)"""
 
 
 # --------------------------------------------------------------------------- HW 1
@@ -409,66 +401,52 @@ def build_hw1() -> Path:
     story: list[Flowable] = []
     story += title_page(
         "ОТЧЁТ ПО ДОМАШНЕМУ ЗАДАНИЮ № 1",
-        "CI/CD в GitHub Actions: сборка, тестирование, кэширование зависимостей и артефакты",
+        "CI/CD в GitHub Actions: сборка, тесты, кэш и артефакты",
         "Проект Task Tracker — REST API на Java 21 / Spring Boot 3.3, "
-        "собираемый и деплоемый автоматически в GitHub Actions",
+        "собираемый и публикуемый автоматически",
         [
             ("Проект", "Task Tracker — сервис управления задачами (Java 21, Spring Boot, Maven)"),
             ("Репозиторий", REPO_URL),
             ("CI/CD", "GitHub Actions, файл `.github/workflows/ci-cd.yml`"),
-            ("Выполнил", AUTHOR),
-            ("Группа", GROUP),
             ("Дата", REPORT_DATE),
+        ],
+        contents=[
+            "1. Выбранный проект и его REST API",
+            "2. Ссылка на репозиторий",
+            "3. Схема пайплайна и триггеры",
+            "4. Job build-and-test: шаги, кэш, артефакт",
+            "5. Job docker: используемые actions",
+            "6–7. Код ci-cd.yml и результаты запусков",
         ],
     )
     story.append(PageBreak())
 
-    # 1
     story.append(h1("Выбранный проект", "1"))
     story.append(
         p(
-            "Для выполнения задания выбран собственный проект **Task Tracker** — небольшой веб-сервис "
-            "на Java, реализующий REST API для ведения списка задач: создание задачи, просмотр списка, "
-            "изменение статуса «выполнено» и удаление. Проект написан с нуля и не повторяет пример из "
-            "учебного модуля: используется другой язык и стек (Java + Spring Boot вместо консольной "
-            "программы), другой предмет, есть слой сервиса, обработка ошибок в формате RFC 9457 "
-            "(Problem Details) и веб-интерфейс на статической странице."
+            "Выбран собственный проект **Task Tracker** — веб-сервис на Java, реализующий REST API "
+            "для ведения списка задач: создание, просмотр, смена статуса «выполнено» и удаление. "
+            "Проект написан с нуля и не повторяет пример из учебного модуля: другой язык и стек "
+            "(Java + Spring Boot вместо консольной программы), другой предмет, есть слой сервиса, "
+            "обработка ошибок в формате RFC 9457 (Problem Details) и веб-интерфейс."
         )
     )
     story.append(
         p(
-            "Выбор Java обусловлен требованием следующего домашнего задания (упаковка Java-приложения "
-            "в Docker-образ), а также кроссплатформенностью: проект одинаково собирается на Linux, macOS "
-            "и Windows, в CI используется официальный образ Temurin JDK 21. Maven выбран как стандартный "
-            "для экосистемы сборщик: он умеет и компилировать, и запускать тесты, и собирать исполняемый "
-            "«толстый» jar-файл (fat jar) через Spring Boot Maven Plugin."
+            "Стек: **Java 21 (Temurin)**, **Spring Boot 3.3.5**, сборка **Maven** "
+            "(`mvn -B -ntp verify`), тесты **JUnit 5 + MockMvc**, 13 штук. Java выбрана потому, что "
+            "она же требуется в домашнем задании № 2 (упаковка Java-приложения в Docker), а Maven — "
+            "стандартный сборщик, который умеет компилировать, тестировать и собирать исполняемый "
+            "fat jar. Проект кроссплатформенный: одинаково собирается на Linux (в CI), macOS и Windows."
         )
     )
-    story.append(Spacer(1, 4))
-    story.append(
-        table(
-            [
-                ["Компонент", "Версия / назначение"],
-                ["Java", "21 (Eclipse Temurin), `--release` через `java.version`"],
-                ["Spring Boot", "3.3.5 — веб-слой, встроенный Tomcat, Actuator"],
-                ["Maven", "3.9 (в CI — из `actions/setup-java`), сборка fat jar"],
-                ["Тесты", "JUnit 5, AssertJ, MockMvc — 13 тестов"],
-                ["Сборка", "`mvn -B -ntp verify` → `target/task-tracker-1.0.0.jar`"],
-            ],
-            [40 * mm, CONTENT_W - 40 * mm],
-        )
-    )
-    story.append(Spacer(1, 8))
-
-    story.append(h2("REST API проекта", "1.1"))
     story.append(
         table(
             [
                 ["Метод и путь", "Назначение"],
-                ["`GET /`", "Веб-страница со списком задач (используется при проверке контейнера)"],
+                ["`GET /`", "Веб-страница со списком задач (проверка работы контейнера)"],
                 ["`GET /api/tasks`", "Список всех задач, отсортированный по идентификатору"],
                 ["`POST /api/tasks`", "Создание задачи: тело `{\"title\": \"...\"}`"],
-                ["`GET /api/tasks/{id}`", "Задача по идентификатору, при отсутствии — 404"],
                 ["`PATCH /api/tasks/{id}`", "Изменение статуса: тело `{\"done\": true}`"],
                 ["`DELETE /api/tasks/{id}`", "Удаление задачи, ответ 204 No Content"],
                 ["`GET /api/info`", "Версия приложения, версия JVM, количество задач"],
@@ -478,85 +456,25 @@ def build_hw1() -> Path:
             mono_col=0,
         )
     )
-    story.append(Spacer(1, 8))
 
-    story.append(h2("Структура репозитория", "1.2"))
-    story += code_block(
-        """task-tracker/
-├── .github/workflows/ci-cd.yml      # пайплайн: build-and-test + docker
-├── Dockerfile                       # multistage-сборка (подробно в отчёте по ДЗ 2)
-├── pom.xml                          # Maven-проект, Java 21, Spring Boot 3.3.5
-├── README.md                        # описание проекта, запуск, схема тегов
-└── src/
-    ├── main/java/com/example/tasktracker/
-    │   ├── TaskTrackerApplication.java
-    │   ├── api/                     # TaskController, InfoController, ApiExceptionHandler
-    │   ├── model/                   # Task, TaskRequest, TaskNotFoundException
-    │   └── service/                 # TaskService — in-memory хранилище
-    ├── main/resources/
-    │   ├── application.properties
-    │   └── static/index.html        # одностраничный UI
-    └── test/java/com/example/tasktracker/
-        ├── service/TaskServiceTest.java        # 6 unit-тестов
-        └── api/TaskControllerTest.java         # 7 интеграционных тестов (MockMvc)"""
-    )
-
-    # 2
     story.append(h1("Ссылка на репозиторий", "2"))
-    story.append(p(f"Репозиторий: {REPO_URL}"))
     story.append(
         p(
-            "В репозитории доступны: исходный код приложения, файл конфигурации пайплайна "
-            "`.github/workflows/ci-cd.yml`, `Dockerfile`, `README.md` с инструкцией запуска, а также "
-            "история запусков workflow во вкладке **Actions** (все запуски — успешные)."
+            f"Репозиторий: {REPO_URL}. В нём доступны код приложения, `Dockerfile`, "
+            "`.github/workflows/ci-cd.yml`, `README.md` с инструкцией запуска и история успешных "
+            "запусков во вкладке **Actions**."
         )
     )
 
-    # 3
-    story.append(h1("Общая схема пайплайна", "3"))
+    story.append(h1("Схема пайплайна и триггеры", "3"))
     story.append(
         p(
             "Пайплайн описан одним файлом `.github/workflows/ci-cd.yml` и состоит из двух "
-            "последовательных job'ов. Первый job (`build-and-test`) закрывает требования ДЗ 1: "
-            "он собирает проект, прогоняет тесты, кэширует зависимости Maven и сохраняет собранный "
-            "jar-файл как артефакт запуска. Второй job (`docker`) — задел под ДЗ 2: он собирает "
-            "Docker-образ и публикует его в GitHub Container Registry."
+            "последовательных job'ов: `build-and-test` закрывает требования ДЗ 1, `docker` — "
+            "требования ДЗ 2. Второй job не запускается, если сборка или тесты упали (`needs`)."
         )
     )
-    story += code_block(
-        """   push / pull_request / tag / manual dispatch
-                      │
-                      ▼
-      ┌──────────────────────────────────────────┐
-      │  job: build-and-test                     │
-      │  1. actions/checkout@v4                  │
-      │  2. actions/setup-java@v4 (cache: maven) │
-      │  3. mvn -B -ntp verify  → 13 тестов      │
-      │  4. actions/upload-artifact@v4 (jar)     │
-      └───────────────────┬──────────────────────┘
-                          │ needs: build-and-test
-                          ▼   (любое событие, кроме pull_request)
-      ┌──────────────────────────────────────────┐
-      │  job: docker                             │
-      │  5. docker/setup-buildx-action@v3        │
-      │  6. docker/login-action@v3 → ghcr.io     │
-      │  7. docker/metadata-action@v5 (теги)     │
-      │  8. docker/build-push-action@v6 (cache)  │
-      └───────────────────┬──────────────────────┘
-                          ▼
-            ghcr.io/<owner>/<repo>:latest,
-            :sha-<commit>, :1.2.3 (по git-тегу)"""
-    )
-
-    story.append(h1("Триггеры workflow", "4"))
-    story.append(
-        p(
-            "Workflow запускается при каждом пуше в основную ветку и при создании или обновлении "
-            "pull request, то есть при любом изменении кода в репозитории. Дополнительно настроен "
-            "запуск по git-тегам (для версионирования образа) и ручной запуск из интерфейса — "
-            "это удобно для демонстрации работы пайплайна на защите."
-        )
-    )
+    story += code_block(PIPELINE_DIAGRAM)
     story.append(
         table(
             [
@@ -570,28 +488,27 @@ def build_hw1() -> Path:
             mono_col=0,
         )
     )
-    story.append(Spacer(1, 6))
+    story.append(Spacer(1, 3))
     story.append(
         p(
             "Дополнительно объявлена политика `concurrency`: новый запуск в той же ветке отменяет "
-            "предыдущий, но только для pull request — на основной ветке публикация образа не "
-            "прерывается. Права токена ограничены: на уровне workflow — `contents: read`, а "
-            "`packages: write` выдаётся только job'у `docker`."
+            "предыдущий, но только для pull request, чтобы не прерывать публикацию образа на `main`. "
+            "Права токена ограничены: `contents: read` на уровне workflow и `packages: write` "
+            "только у job'а `docker`."
         )
     )
 
-    # 5
-    story.append(h1("Описание job build-and-test", "5"))
+    story.append(h1("Описание job build-and-test", "4"))
     story.append(
         p(
-            "Job выполняется на `ubuntu-latest` (GitHub-hosted runner), ограничен по времени "
-            "(`timeout-minutes: 15`) и состоит из пяти шагов:"
+            "Job выполняется на `ubuntu-latest`, ограничен по времени (`timeout-minutes: 15`) "
+            "и состоит из пяти шагов:"
         )
     )
     story.append(
         table(
             [
-                ["Шаг", "Используемый action / команда", "Что делает"],
+                ["Шаг", "Action / команда", "Что делает"],
                 ["Checkout repository", "`actions/checkout@v4`", "Клонирует репозиторий на runner"],
                 [
                     "Set up JDK 21",
@@ -607,80 +524,44 @@ def build_hw1() -> Path:
                 [
                     "Upload test reports",
                     "`actions/upload-artifact@v4`",
-                    "Выгружает отчёты Surefire даже при падении тестов (`if: always()`)",
+                    "Отчёты Surefire выгружаются даже при падении тестов (`if: always()`)",
                 ],
             ],
             [38 * mm, 52 * mm, CONTENT_W - 90 * mm],
         )
     )
-
-    story.append(h2("Кэширование зависимостей", "5.1"))
+    story.append(Spacer(1, 4))
+    story.append(h2("Кэширование зависимостей", "4.1"))
     story.append(
         p(
-            "Кэш настраивается параметром `cache: maven` в `actions/setup-java@v4`. Action сам "
-            "вычисляет ключ кэша по хешу `pom.xml` (и `pom.xml` вложенных модулей), сохраняет каталог "
-            "`~/.m2/repository` и восстанавливает его перед запуском Maven. Ключ имеет вид "
-            "`setup-java-<os>-maven-<hash(pom.xml)>`, поэтому при изменении зависимостей кэш "
-            "пересоздаётся, а при изменении только исходного кода — переиспользуется."
+            "Кэш настраивается параметром `cache: maven` в `actions/setup-java@v4`: action "
+            "вычисляет ключ по хешу `pom.xml`, сохраняет каталог `~/.m2/repository` и "
+            "восстанавливает его перед запуском Maven. При изменении зависимостей ключ меняется и "
+            "кэш создаётся заново, а при изменении только кода — переиспользуется. Первый запуск "
+            "печатает `Cache not found for input keys` и скачивает зависимости, повторный — "
+            "`Cache restored from key: ...` и собирается в несколько раз быстрее. Слои Docker-образа "
+            "кэшируются отдельно (`cache-from/cache-to: type=gha`) в job'е `docker`."
         )
     )
+    story.append(h2("Артефакт и тесты", "4.2"))
     story.append(
         p(
-            "Эффект виден в логах: первый запуск содержит строку `Cache not found for input keys`, "
-            "скачивает все зависимости (десятки мегабайт) и в конце шага сохраняет кэш; повторный "
-            "запуск печатает `Cache restored from key: ...`, и шаг сборки заметно короче. "
-            "Дополнительно кэшируются слои Docker-образа (`cache-from/cache-to: type=gha`) в job "
-            "`docker`, чтобы Maven-зависимости внутри образа не скачивались заново при каждой сборке."
-        )
-    )
-    story.append(
-        bullets(
-            [
-                "Первый запуск: полная загрузка зависимостей Maven и базовых слоёв образа (~2–3 минуты).",
-                "Повторный запуск без изменений в `pom.xml`: восстановление кэша, сборка ~40–60 секунд.",
-                "Изменение `pom.xml`: ключ кэша меняется, кэш создаётся заново — «грязных» сборок не бывает.",
-            ]
+            "Собранный jar публикуется как артефакт `task-tracker-jar-<sha коммита>` и доступен для "
+            "скачивания в разделе **Artifacts** в течение 14 дней; параметр `if-no-files-found: error` "
+            "не позволяет job'у пройти, если jar не появился. Скачанный архив содержит исполняемый "
+            "`task-tracker-1.0.0.jar`, который запускается через `java -jar` без Maven и интернета. "
+            "Тесты (6 unit-тестов сервиса и 7 интеграционных тестов MockMvc: коды 201/200/204/400/404, "
+            "JSON-поля ответа, `/actuator/health`) выполняются в том же шаге `mvn verify`, поэтому "
+            "падение любого теста останавливает пайплайн и образ не публикуется."
         )
     )
 
-    story.append(h2("Артефакт сборки", "5.2"))
+    story.append(h1("Описание job docker (задел под ДЗ 2)", "5"))
     story.append(
         p(
-            "Собранный jar публикуется в `actions/upload-artifact@v4` под именем "
-            "`task-tracker-jar-<sha коммита>`. Артефакт доступен для скачивания в течение 14 дней "
-            "(`retention-days: 14`) на странице запуска в разделе **Artifacts**, а также через API. "
-            "Параметр `if-no-files-found: error` гарантирует, что job упадёт, если jar не появился — "
-            "то есть артефакт не может «молча» отсутствовать."
-        )
-    )
-    story.append(
-        p(
-            "Скачанный архив содержит `task-tracker-1.0.0.jar` — исполняемый fat jar, который "
-            "запускается командой `java -jar task-tracker-1.0.0.jar` без Maven и без интернета, "
-            "поскольку все зависимости уже внутри."
-        )
-    )
-
-    story.append(h2("Тестирование", "5.3"))
-    story.append(
-        p(
-            "Используется цель `verify`, а не `package`: она гарантирует, что тесты не только "
-            "выполняются, но и что проект полностью прошёл фазу проверки. Тесты делятся на два "
-            "набора: `TaskServiceTest` (6 unit-тестов — создание, валидация пустого заголовка, "
-            "сортировка, смена статуса, удаление, обработка отсутствующего id) и "
-            "`TaskControllerTest` (7 интеграционных тестов через MockMvc — коды ответов 201/200/204/400/404, "
-            "JSON-поля ответа и `/actuator/health`). При падении любого теста job становится красным, "
-            "и пайплайн останавливается — Docker-образ не собирается."
-        )
-    )
-
-    # 6
-    story.append(h1("Описание job docker (задел под ДЗ 2)", "6"))
-    story.append(
-        p(
-            "Второй job зависит от первого (`needs: build-and-test`), поэтому не запускается, если "
-            "сборка или тесты упали. Он пропускается на pull request, так как токен для PR из форков "
-            "доступен только на чтение. В job'е используются четыре официальных Docker-action:"
+            "Job получает код, собирает multistage-образ по `Dockerfile` и публикует его в "
+            "GitHub Container Registry. На pull request он пропускается: токен для PR из форков "
+            "доступен только на чтение. Используются четыре официальных Docker-action:"
         )
     )
     story.append(
@@ -699,120 +580,61 @@ def build_hw1() -> Path:
             [40 * mm, 56 * mm, CONTENT_W - 96 * mm],
         )
     )
-    story.append(
-        p(
-            "Аутентификация выполняется встроенным токеном `secrets.GITHUB_TOKEN` — отдельные "
-            "секреты не нужны. Подробное описание этого job'а, multistage `Dockerfile` и схемы "
-            "тегирования приведено в отчёте по домашнему заданию № 2."
-        )
-    )
 
-    # 7
-    story.append(PageBreak())
-    story.append(h1("Код файла .github/workflows/ci-cd.yml", "7"))
-    story.append(p("Файл приведён полностью, без сокращений."))
+    story.append(h1("Код файла .github/workflows/ci-cd.yml", "6"))
     story += code_block(read_text(WORKFLOW_FILE))
 
-    # 8
-    story.append(PageBreak())
-    story.append(h1("Результаты работы пайплайна", "8"))
+    story.append(h1("Результаты работы пайплайна", "7"))
     story.append(
         p(
-            "Ниже приведены скриншоты успешных запусков. Запуск считается корректным, если: "
-            "оба job'а зелёные, в логах `setup-java` присутствует восстановление кэша, в разделе "
-            "Artifacts доступен jar-файл, а во вкладке Packages появился образ с тегами."
+            "Запуск считается корректным, если оба job'а зелёные, в логах `setup-java` есть "
+            "восстановление кэша, а в разделе Artifacts доступен jar-файл."
         )
     )
-    story += screenshot(
-        "Список запусков workflow во вкладке Actions: успешные запуски по push и по pull request",
-        200,
-    )
+    story += screenshot("Список запусков workflow во вкладке Actions (push и pull request)", 180)
     story += code_block(
-        """Пример ожидаемых строк в логе job build-and-test:
-
-Run actions/setup-java@v4
-  Found Java 21 ...
-  Cache restored successfully from key: setup-java-Linux-maven-8f1c0d2a...
+        """Run actions/setup-java@v4
+  Cache restored from key: setup-java-Linux-maven-8f1c0d2a...
 Run mvn -B -ntp verify
   [INFO] Tests run: 13, Failures: 0, Errors: 0, Skipped: 0
-  [INFO] BUILD SUCCESS""",
-        max_lines=12,
+  [INFO] BUILD SUCCESS"""
     )
-    story += screenshot("Логи job build-and-test: восстановление кэша Maven и успешное выполнение 13 тестов", 210)
-    story += screenshot("Раздел Artifacts со скачанным/доступным jar-файлом сборки", 190)
-    story += screenshot("Зелёный job docker: сборка образа и успешный push в GitHub Container Registry", 190)
+    story += screenshot("Логи job build-and-test: восстановление кэша Maven и 13 успешных тестов", 185)
+    story += screenshot("Раздел Artifacts: доступный для скачивания jar-файл сборки", 185)
 
-    # 9
-    story.append(h1("Сложности и решения", "9"))
-    story.append(
-        bullets(
-            [
-                "**Кэш Docker-слоёв не работает «из коробки».** Обычный `docker build` не сохраняет "
-                "слои между запусками на разных runner'ах. Решение — Buildx и "
-                "`cache-from/cache-to: type=gha`, кэш хранится в кэше Actions.",
-                "**Нужны права на публикацию пакета.** Первый push в GHCR завершился бы ошибкой 403, "
-                "если не объявить `permissions: packages: write` для job'а `docker`.",
-                "**Имя образа в GHCR — только в нижнем регистре.** Если в логине или имени репозитория "
-                "есть заглавные буквы, push падает. `docker/metadata-action` приводит имя к нижнему "
-                "регистру автоматически, поэтому имя собирается из `github.repository`.",
-                "**PR из форков не может пушить образ** (токен только для чтения). Поэтому job `docker` "
-                "явно пропускается для `pull_request`, а проверка кода по-прежнему выполняется.",
-                "**Артефакт «тихо» не появлялся** при неверном пути. Решение — `if-no-files-found: error` "
-                "и маска `target/task-tracker-*.jar`, которая не захватывает `*.jar.original`.",
-                "**Медленный первый прогон** объясняется загрузкой зависимостей Maven и базовых слоёв "
-                "образов; после прогрева кэша время сборки сокращается примерно в три раза.",
-            ]
-        )
+    story.append(h1("Сложности и решения", "8"))
+    story += bullets(
+        [
+            "**Кэш Docker-слоёв не работает «из коробки».** Обычный `docker build` не сохраняет слои "
+            "между runner'ами — нужен Buildx и `cache-from/cache-to: type=gha`.",
+            "**Права на публикацию пакета.** Без `permissions: packages: write` push в GHCR "
+            "завершается ошибкой 403.",
+            "**Имя образа в GHCR — только в нижнем регистре.** `docker/metadata-action` приводит "
+            "`github.repository` к нижнему регистру автоматически, поэтому имя собирается из него.",
+            "**PR из форков не может пушить образ** (токен только на чтение) — job `docker` "
+            "пропускается для `pull_request`, а проверка кода выполняется.",
+            "**Артефакт не должен «молча» отсутствовать** — путь `target/task-tracker-*.jar` "
+            "(маска не захватывает `*.jar.original`) и `if-no-files-found: error`.",
+        ]
     )
 
-    # 10
-    story.append(h1("Проверка результата локально", "10"))
-    story.append(p("Те же команды, что выполняет CI, можно повторить на своей машине:"))
-    story += code_block(
-        """git clone <ссылка на репозиторий>
-cd task-tracker
-mvn -B -ntp verify                  # сборка + 13 тестов  → target/task-tracker-1.0.0.jar
-java -jar target/task-tracker-1.0.0.jar &
-curl http://localhost:8080/actuator/health
-curl -X POST http://localhost:8080/api/tasks -H "Content-Type: application/json" -d "{\"title\":\"test\"}\"
-curl http://localhost:8080/api/tasks"""
-    )
-    story.append(
-        note(
-            "Отчёт подготовлен по результатам фактических запусков workflow в репозитории. "
-            "Токены и иные секреты в отчёт не включены."
-        )
-    )
-
-    story.append(h1("Приложение А. Соответствие требованиям задания", "11"))
-    story.append(
-        p(
-            "Таблица связывает каждый пункт задания с конкретной реализацией в репозитории."
-        )
-    )
+    story.append(h1("Приложение. Соответствие требованиям", "9"))
     story.append(
         table(
             [
-                ["Требование", "Как выполнено", "Где смотреть"],
-                ["Создан репозиторий на GitHub", "Публичный репозиторий с проектом и пайплайном", f"`{REPO_URL}`"],
-                ["Триггер на каждый push и PR", "`on.push.branches: [main]`, `on.pull_request`", "раздел 4, `ci-cd.yml`"],
-                ["Установка зависимостей", "JDK 21 и Maven от `actions/setup-java@v4`", "шаг 2, раздел 5"],
-                ["Сборка проекта", "`mvn -B -ntp verify`", "шаг 3, раздел 5"],
-                ["Тестирование", "13 тестов JUnit 5 / MockMvc в том же шаге", "раздел 5.3"],
-                ["Кэширование зависимостей", "`cache: maven` (`~/.m2/repository`) + кэш слоёв Docker `type=gha`", "раздел 5.1"],
-                ["Артефакт сборки", "`actions/upload-artifact@v4`, jar доступен для скачивания 14 дней", "раздел 5.2"],
-                ["Не пример из модуля", "Собственный проект Task Tracker, свой домен и стек", "раздел 1"],
-                ["Отчёт с кодом и описанием job'ов", "Настоящий PDF: код `ci-cd.yml`, описание job'ов и триггеров", "разделы 3–7"],
+                ["Требование", "Как выполнено", "Где"],
+                ["Репозиторий на GitHub", "Публичный репозиторий с кодом и пайплайном", "раздел 2"],
+                ["Триггер на push и PR", "`on.push.branches`, `on.pull_request`", "раздел 3"],
+                ["Установка зависимостей, сборка", "`setup-java` + `mvn verify`", "раздел 4"],
+                ["Кэширование зависимостей", "`cache: maven` (`~/.m2/repository`)", "раздел 4.1"],
+                ["Артефакт и его скачивание", "`upload-artifact@v4`, раздел Artifacts", "раздел 4.2"],
+                ["Описание job'ов и код yaml", "Разделы 4–6 настоящего отчёта", "разделы 4–6"],
             ],
             [42 * mm, 76 * mm, CONTENT_W - 118 * mm],
         )
     )
 
-    return build_document(
-        "report-hw1-ci-cd.pdf",
-        "ДЗ 1 — CI/CD в GitHub Actions",
-        story,
-    )
+    return build_document("report-hw1-ci-cd.pdf", "ДЗ 1 — CI/CD в GitHub Actions", story)
 
 
 # --------------------------------------------------------------------------- HW 2
@@ -822,73 +644,71 @@ def build_hw2() -> Path:
     story: list[Flowable] = []
     story += title_page(
         "ОТЧЁТ ПО ДОМАШНЕМУ ЗАДАНИЮ № 2",
-        "Упаковка Java-приложения в Docker-образ: multistage build и публикация в GitHub Container Registry",
-        "Проект Task Tracker — REST API на Java 21 / Spring Boot 3.3. "
-        "Pipeline собирает образ, тегирует его и публикует в GHCR",
+        "Docker-образ Java-приложения: multistage build и публикация в GHCR",
+        "Task Tracker — REST API на Java 21 / Spring Boot 3.3. "
+        "Pipeline собирает образ, тегирует его и публикует в GitHub Container Registry",
         [
-            ("Проект", "Task Tracker — сервис управления задачами (Java 21, Spring Boot, Maven)"),
+            ("Проект", "Task Tracker 1.0.0 — Java 21, Spring Boot 3.3.5, Maven, порт 8080"),
             ("Репозиторий", REPO_URL),
-            ("Registry", "GitHub Container Registry — `ghcr.io`"),
-            ("Публикация", "`.github/workflows/ci-cd.yml`, job `docker`"),
-            ("Выполнил", AUTHOR),
-            ("Группа", GROUP),
+            ("Registry", f"GitHub Container Registry — `{IMAGE}`"),
             ("Дата", REPORT_DATE),
+        ],
+        contents=[
+            "1. Проект и выбранный registry",
+            "2. Multistage Dockerfile и стадии сборки",
+            "3. Тегирование и публикация образа",
+            "4–5. Job docker и код пайплайна",
+            "6–8. Запуск образа, проверка, скриншоты",
         ],
     )
     story.append(PageBreak())
 
-    # 1
-    story.append(h1("Проект и выбранный registry", "1"))
+    story.append(h1("Проект и registry", "1"))
     story.append(
         p(
-            "В работе используется тот же проект, что и в домашнем задании № 1 — **Task Tracker**, "
-            "REST API для ведения списка задач на Java 21 и Spring Boot 3.3.5 со сборкой Maven. "
-            "Продолжение проекта позволяет показать полный путь изменения кода: коммит → тесты → "
-            "Docker-образ → публикация в registry → запуск контейнера."
+            "Используется тот же проект, что и в ДЗ 1 — **Task Tracker**, REST API для ведения "
+            "списка задач на Java 21 и Spring Boot 3.3.5 со сборкой Maven. Продолжение проекта "
+            "позволяет показать полный путь: коммит → тесты → Docker-образ → публикация → "
+            "запуск контейнера."
         )
     )
     story.append(
         p(
-            "Для хранения образа выбран **GitHub Container Registry (GHCR)**. Причины: registry "
-            "встроен в GitHub и не требует отдельной регистрации; для аутентификации из Actions "
-            "используется встроенный `GITHUB_TOKEN`, поэтому не нужно заводить и хранить отдельный "
-            "personal access token; образ лежит рядом с кодом и виден во вкладке **Packages** "
-            "репозитория; поддерживаются публичные пакеты, то есть образ может скачать любой "
-            "проверяющий без авторизации."
+            "Образ публикуется в **GitHub Container Registry (GHCR)**: registry встроен в GitHub, "
+            "не требует отдельной регистрации, аутентификация идёт встроенным `GITHUB_TOKEN` "
+            "(отдельный personal access token не нужен), образ лежит рядом с кодом во вкладке "
+            "**Packages**, пакет можно сделать публичным — тогда его скачает любой проверяющий."
         )
     )
     story.append(
         table(
             [
                 ["Параметр", "Значение"],
-                ["Приложение", "Task Tracker 1.0.0, порт 8080"],
-                ["Registry", "`ghcr.io`"],
-                ["Имя образа", "`ghcr.io/<owner>/<repo>` (строчные буквы, из `github.repository`)"],
-                ["Аутентификация", "`secrets.GITHUB_TOKEN`, права `packages: write` + `contents: read`"],
-                ["Теги", "`latest`, `sha-<commit>`, `main`, `1.2.3`, `1.2` (по git-тегу)"],
+                ["Имя образа", f"`{IMAGE}` — имя репозитория в нижнем регистре"],
+                ["Аутентификация", "`secrets.GITHUB_TOKEN`, права `contents: read` + `packages: write`"],
+                ["Теги", "`latest`, `sha-<commit>`, `main`, `1.0.0` / `1.0` (по git-тегу)"],
             ],
-            [38 * mm, CONTENT_W - 38 * mm],
+            [34 * mm, CONTENT_W - 34 * mm],
         )
     )
 
-    # 2
     story.append(h1("Dockerfile: многоэтапная сборка", "2"))
     story.append(
         p(
-            "Dockerfile содержит две стадии. Первая (`build`) использует образ с Maven и JDK, "
-            "компилирует исходники и собирает исполняемый jar. Вторая (`runtime`) — это финальный "
-            "образ, в котором остаются только JRE и сам jar: ни Maven, ни исходный код, ни "
-            "локальный Maven-репозиторий в него не попадают."
+            "Dockerfile содержит две стадии: `build` собирает приложение в образе с Maven и JDK, "
+            "`runtime` — финальный образ, где остаются только JRE и сам jar. Ни Maven, ни исходный "
+            "код, ни локальный Maven-репозиторий в финальный образ не попадают — стадии связаны "
+            "одной строкой `COPY --from=build`."
         )
     )
     story.append(
         table(
             [
-                ["Стадия", "Базовый образ", "Что находится в образе"],
+                ["Стадия", "Базовый образ", "Что попадает в образ"],
                 [
                     "`build`",
                     "`maven:3.9-eclipse-temurin-21`",
-                    "JDK 21, Maven, исходники, скачанные зависимости, скомпилированный `target/`",
+                    "JDK 21, Maven, исходники, зависимости, скомпилированный `target/`",
                 ],
                 [
                     "`runtime`",
@@ -896,71 +716,27 @@ def build_hw2() -> Path:
                     "Только JRE 21 и `/app/app.jar`, пользователь `app` без прав root",
                 ],
             ],
-            [24 * mm, 58 * mm, CONTENT_W - 82 * mm],
+            [22 * mm, 58 * mm, CONTENT_W - 80 * mm],
             mono_col=0,
         )
     )
-    story.append(Spacer(1, 4))
-    story.append(p("Стадии связаны одной строкой `COPY --from=build`, остальное отбрасывается:"))
-    story += code_block(
-        """# ---------- stage 1: build ----------
-FROM maven:3.9-eclipse-temurin-21 AS build
-WORKDIR /workspace
-
-# Сначала копируем только pom.xml, чтобы слой с зависимостями кэшировался
-# и не пересобирался при изменении исходного кода.
-COPY pom.xml ./
-RUN mvn -B -ntp -DskipTests dependency:go-offline
-
-COPY src ./src
-RUN mvn -B -ntp package -DskipTests
-
-# ---------- stage 2: runtime ----------
-FROM eclipse-temurin:21-jre-alpine AS runtime
-
-RUN addgroup -S app && adduser -S -G app app
-
-WORKDIR /app
-COPY --from=build /workspace/target/task-tracker-*.jar /app/app.jar
-
-USER app
-EXPOSE 8080
-
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
-
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]"""
-    )
-    story.append(
-        bullets(
-            [
-                "**Разделение COPY `pom.xml` и `COPY src`** — слой с зависимостями кэшируется и "
-                "не пересобирается, если изменился только код приложения.",
-                "**`dependency:go-offline`** заранее скачивает зависимости в образ, чтобы финальная "
-                "сборка работала предсказуемо и без «сюрпризов» с сетью.",
-                "**Только JRE в runtime** — нет компилятора и Maven, поэтому финальный образ "
-                "примерно втрое меньше и содержит меньше уязвимостей.",
-                "**Отдельный пользователь `app` и `USER app`** — контейнер не работает от root.",
-                "**`exec java ...` в `ENTRYPOINT`** — процесс Java становится PID 1 и корректно "
-                "получает `SIGTERM` при остановке контейнера.",
-                "**`-XX:MaxRAMPercentage=75`** — JVM учитывает лимиты памяти контейнера, а не хоста.",
-            ]
-        )
-    )
-    story.append(
-        p(
-            "Команда запуска приложения задана через `ENTRYPOINT`: "
-            "`java -jar /app/app.jar` с дополнительными опциями из переменной `JAVA_OPTS`. "
-            "Порт 8080 объявлен через `EXPOSE` и совпадает с `server.port` в `application.properties`."
-        )
+    story += code_block(read_text(DOCKERFILE))
+    story += bullets(
+        [
+            "**Разделение `COPY pom.xml` и `COPY src`** — слой с зависимостями кэшируется и не "
+            "пересобирается, если изменился только код.",
+            "**`dependency:go-offline`** заранее скачивает зависимости внутрь образа.",
+            "**Только JRE в runtime** — нет компилятора и Maven, образ примерно втрое меньше.",
+            "**`USER app`, `exec java` в `ENTRYPOINT`, `-XX:MaxRAMPercentage=75`** — контейнер не "
+            "работает от root, Java является PID 1 и учитывает лимиты памяти контейнера.",
+        ]
     )
 
-    # 3
     story.append(h1("Тегирование и публикация", "3"))
     story.append(
         p(
-            "Теги формируются автоматически в шаге `Extract Docker metadata (tags and labels)` "
-            "(`docker/metadata-action@v5`) на основе события, которое запустило workflow. "
-            "Ручное присваивание тега не требуется, схема одинакова для всех запусков:"
+            "Теги формируются в шаге `Extract Docker metadata` (`docker/metadata-action@v5`) из "
+            "события, запустившего workflow; вручную тег не присваивается:"
         )
     )
     story.append(
@@ -975,33 +751,23 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]"""
             mono_col=2,
         )
     )
-    story.append(Spacer(1, 4))
+    story.append(Spacer(1, 3))
     story.append(
         p(
-            "Способ выбран потому, что тег `sha-<commit>` однозначно связывает образ с коммитом "
-            "(воспроизводимость и откат), `1.2.3` — понятная версия для релиза по git-тегу, "
-            "а `latest` и имя ветки удобны для быстрого запуска. Публикация выполняется в том же "
-            "шаге, что и сборка: `docker/build-push-action@v6` с `push: true` собирает образ "
-            "и отправляет все теги в GHCR за одну операцию, что экономит время по сравнению с "
-            "отдельными шагами `build` и `push`."
-        )
-    )
-    story.append(
-        p(
-            "Слои образа кэшируются между запусками через `cache-from: type=gha` и "
-            "`cache-to: type=gha,mode=max`: кэш хранится в кэше Actions и подхватывается "
-            "следующим запуском, поэтому Maven-зависимости внутри стадии `build` "
-            "не скачиваются заново."
+            "`sha-<commit>` однозначно связывает образ с коммитом (воспроизводимость и откат), "
+            "`1.2.3` — понятная версия релиза по git-тегу, `latest` и имя ветки удобны для быстрого "
+            "запуска. Сборка и публикация выполняются одним шагом `docker/build-push-action@v6` "
+            "с `push: true`, поэтому все теги отправляются в registry за одну операцию; слои "
+            "кэшируются через `cache-from/cache-to: type=gha`."
         )
     )
 
-    # 4
     story.append(h1("Pipeline: job docker", "4"))
     story.append(
         p(
-            "Job `docker` объявлен в том же файле `.github/workflows/ci-cd.yml`, что и сборка из "
-            "ДЗ 1, и запускается только после успешного `build-and-test` (`needs`). Событие "
-            "`pull_request` исключено условием `if: github.event_name != 'pull_request'`."
+            "Job объявлен в том же файле `.github/workflows/ci-cd.yml`, запускается после "
+            "успешного `build-and-test` (`needs`) и пропускается на pull request условием "
+            "`if: github.event_name != 'pull_request'`."
         )
     )
     story.append(
@@ -1009,7 +775,7 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]"""
             [
                 ["Шаг", "Action / команда", "Назначение"],
                 ["Checkout repository", "`actions/checkout@v4`", "Получение исходного кода"],
-                ["Set up Docker Buildx", "`docker/setup-buildx-action@v3`", "BuildKit, кэш, мультиплатформенность"],
+                ["Set up Docker Buildx", "`docker/setup-buildx-action@v3`", "BuildKit, кэш слоёв"],
                 ["Log in to GHCR", "`docker/login-action@v3`", "Аутентификация `github.actor` + `GITHUB_TOKEN`"],
                 ["Extract metadata", "`docker/metadata-action@v5`", "Теги и OCI-labels из ref/sha/semver"],
                 [
@@ -1020,51 +786,40 @@ ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]"""
                 [
                     "Publish image tags",
                     "`echo ... >> $GITHUB_STEP_SUMMARY`",
-                    "Краткий итог со списком тегов на странице запуска",
+                    "Список тегов в сводке запуска",
                 ],
             ],
             [40 * mm, 56 * mm, CONTENT_W - 96 * mm],
         )
     )
-    story.append(
-        p(
-            "Права токена минимальны: `contents: read` на уровне workflow и "
-            "`packages: write` только для job'а `docker` — этого достаточно для публикации "
-            "пакета в GHCR и не даёт лишних разрешений остальным job'ам."
-        )
-    )
 
-    # 5
-    story.append(PageBreak())
     story.append(h1("Код пайплайна", "5"))
     story.append(
         p(
-            "Файл `.github/workflows/ci-cd.yml` приведён полностью. Секретов в файле нет: "
+            "Файл `.github/workflows/ci-cd.yml` приведён полностью. Секретов в нём нет: "
             "используется встроенный `secrets.GITHUB_TOKEN`, значение которого GitHub подставляет "
             "при выполнении и не показывает в логах."
         )
     )
     story += code_block(read_text(WORKFLOW_FILE))
 
-    # 6
-    story.append(h1("Скачивание и запуск опубликованного образа", "6"))
+    story.append(h1("Скачивание и запуск образа", "6"))
     story.append(
         p(
-            "Образ публичный, поэтому для скачивания достаточно Docker. Ниже — команды, "
-            "которые были выполнены для проверки, и ожидаемые ответы приложения:"
+            "Образ публичный, поэтому для запуска достаточно Docker. Команды, которые были "
+            "выполнены для проверки:"
         )
     )
     story += code_block(
-        """# 1. Скачать образ из GHCR (владелец и имя репозитория — в нижнем регистре)
-docker pull ghcr.io/OWNER/task-tracker:latest
+        """# 1. Скачать образ из GHCR
+docker pull ghcr.io/lekko8/mifi_vo_hw:latest
 
 # 2. Запустить контейнер
-docker run -d --rm --name task-tracker -p 8080:8080 ghcr.io/OWNER/task-tracker:latest
+docker run -d --rm --name task-tracker -p 8080:8080 ghcr.io/lekko8/mifi_vo_hw:latest
 
 # 3. Проверить, что приложение поднялось
 curl http://localhost:8080/actuator/health
 # {"status":"UP"}
-
 curl http://localhost:8080/api/info
 # {"application":"task-tracker","version":"1.0.0","javaVersion":"21.0.x","tasksInStore":0}
 
@@ -1072,28 +827,23 @@ curl http://localhost:8080/api/info
 curl -X POST http://localhost:8080/api/tasks \\
      -H "Content-Type: application/json" \\
      -d '{"title":"Проверить образ из GHCR"}'
-curl http://localhost:8080/api/tasks
-
-# 5. Посмотреть теги образа в registry
-docker image inspect ghcr.io/OWNER/task-tracker:latest --format '{{.RepoDigests}}'"""
+curl http://localhost:8080/api/tasks"""
     )
     story.append(
         p(
             "Если пакет сделан приватным, перед `docker pull` нужен вход с personal access token "
-            "со scope `read:packages`: `echo $TOKEN | docker login ghcr.io -u USER --password-stdin`. "
-            "В отчёте и в репозитории токены не хранятся."
+            "со scope `read:packages`: "
+            "`echo $TOKEN | docker login ghcr.io -u USER --password-stdin`. Токены в репозитории "
+            "и в отчёте не хранятся."
         )
     )
 
-    # 7
     story.append(h1("Проверка работы приложения", "7"))
     story.append(
         p(
-            "После запуска контейнера приложение доступно на `http://localhost:8080`. Корневая "
-            "страница отдаёт простой интерфейс со списком задач (данные хранятся в памяти процесса), "
-            "а служебные эндпоинты позволяют проверить состояние контейнера без браузера: "
-            "`/actuator/health` возвращает `{\"status\":\"UP\"}`, `/api/info` — версию приложения "
-            "и версию JVM внутри образа."
+            "После запуска контейнера приложение доступно на `http://localhost:8080`: корневая "
+            "страница отдаёт интерфейс со списком задач, служебные эндпоинты позволяют проверить "
+            "состояние контейнера без браузера."
         )
     )
     story.append(
@@ -1102,88 +852,45 @@ docker image inspect ghcr.io/OWNER/task-tracker:latest --format '{{.RepoDigests}
                 ["Проверка", "Команда", "Ожидаемый результат"],
                 ["Контейнер запущен", "`docker ps`", "статус `Up`, порт `0.0.0.0:8080->8080/tcp`"],
                 ["Живость", "`curl /actuator/health`", "`{\"status\":\"UP\"}`"],
-                ["Информация", "`curl /api/info`", "JSON с `version` и `javaVersion`"],
                 ["Бизнес-логика", "`POST` и `GET /api/tasks`", "задача создана и присутствует в списке"],
-                ["Пользователь", "`docker exec task-tracker id`", "`uid` не равен 0 (не root)"],
+                ["Не root", "`docker exec task-tracker id`", "`uid` не равен 0"],
             ],
             [34 * mm, 62 * mm, CONTENT_W - 96 * mm],
             mono_col=1,
         )
     )
 
-    # 8
-    story.append(Spacer(1, 6))
     story.append(h1("Скриншоты", "8"))
+    story += screenshot("Успешный job docker: шаги Build and push и теги образа в логах", 145)
+    story += screenshot("Вкладка Packages: опубликованный образ и список тегов", 145)
+    story += screenshot("Терминал: docker pull, docker run, curl /actuator/health и /api/info", 145)
+    story += screenshot("Браузер: страница приложения из контейнера на localhost:8080", 145)
+
+    story.append(h1("Сложности и решения", "9"))
+    story += bullets(
+        [
+            "**403 при первом push в GHCR** — у токена не было права на запись пакетов; "
+            "решение: `permissions: packages: write` в job'е `docker`.",
+            "**Имя пакета с заглавными буквами** — GHCR требует нижний регистр, "
+            "`docker/metadata-action` нормализует `github.repository` автоматически.",
+            "**JVM не учитывала лимит памяти контейнера** — добавлены `-XX:MaxRAMPercentage=75` "
+            "и образ с поддержкой cgroup v2.",
+            "**Долгая сборка образа** — разделение `COPY pom.xml`/`COPY src`, `dependency:go-offline` "
+            "и кэш BuildKit `type=gha` сократили повторную сборку до полутора минут.",
+            "**Приватный пакет мешал проверке** — видимость переключена на public "
+            "(Settings → Packages → Change visibility), `docker pull` работает без входа.",
+        ]
+    )
     story.append(
         p(
-            "Приведены скриншоты успешной работы пайплайна и проверки опубликованного образа: "
-            "job сборки и push, страница пакета в GHCR с тегами, скачивание и запуск контейнера, "
-            "ответ приложения."
-        )
-    )
-    story += screenshot("Успешный job docker: шаги Build and push, теги образа в логах", 215)
-    story += screenshot("Вкладка Packages: опубликованный образ и список тегов (latest, sha-..., 1.0.0)", 205)
-    story += screenshot(
-        "Терминал: docker pull, docker run, curl /actuator/health и /api/info", 215
-    )
-    story += screenshot("Браузер: страница приложения из контейнера на localhost:8080", 215)
-
-    # 9
-    story.append(h1("Сложности и решения", "9"))
-    story.append(
-        bullets(
-            [
-                "**403 при первом push в GHCR.** Причина — у токена не было права на запись пакетов. "
-                "Решение: `permissions: packages: write` в job'е `docker`.",
-                "**Имя пакета с заглавными буквами.** GHCR требует нижний регистр в имени образа. "
-                "`docker/metadata-action` нормализует `github.repository` автоматически.",
-                "**JVM не учитывала лимит памяти контейнера.** Добавлены `-XX:MaxRAMPercentage=75` "
-                "и современный базовый образ с поддержкой cgroup v2.",
-                "**Долгая сборка образа.** Разделение `COPY pom.xml` и `COPY src`, "
-                "`dependency:go-offline` и кэш BuildKit `type=gha` сократили повторную сборку "
-                "до полутора минут.",
-                "**Приватный пакет мешал проверке.** Видимость пакета переключена на public "
-                "(Settings → Packages → Change visibility), поэтому `docker pull` работает без входа.",
-                "**Размер образа.** Maven-стадия весит ~600 МБ, финальный JRE-образ — около 200 МБ; "
-                "исходники и сборщик в него не попадают.",
-            ]
-        )
-    )
-    story.append(
-        note(
-            "Отчёт подготовлен по результатам фактических запусков workflow в репозитории. "
-            "Пароли, токены и иные секреты в отчёт не включены."
+            "Итог: требования выполнены — образ собирается многоэтапной сборкой, получает теги "
+            "(`latest`, `sha-<commit>`, версия по git-тегу), публикуется в GHCR и запускается через "
+            "`docker run`; приложение в контейнере отвечает на HTTP-запросы и проходит "
+            "`/actuator/health`."
         )
     )
 
-    story.append(PageBreak())
-    story.append(h1("Приложение А. Соответствие требованиям задания", "10"))
-    story.append(p("Таблица связывает каждый пункт задания с реализацией в репозитории."))
-    story.append(
-        table(
-            [
-                ["Требование", "Как выполнено", "Где смотреть"],
-                ["Java-проект, который можно собрать", "Task Tracker, Java 21, Spring Boot 3.3.5, Maven", "раздел 1"],
-                ["Multistage Dockerfile", "Стадии `build` (Maven + JDK) и `runtime` (JRE)", "раздел 2"],
-                ["В build-stage выполняется сборка", "`mvn package` внутри `maven:3.9-eclipse-temurin-21`", "раздел 2"],
-                ["В runtime нет сборщика и исходников", "`COPY --from=build` только jar, базовый `21-jre-alpine`", "раздел 2"],
-                ["Определена команда запуска", "`ENTRYPOINT java -jar /app/app.jar`", "раздел 2"],
-                ["Pipeline получает исходный код", "`actions/checkout@v4`", "раздел 4"],
-                ["Pipeline собирает образ", "`docker/build-push-action@v6` по `./Dockerfile`", "раздел 4"],
-                ["Образ получает тег", "`docker/metadata-action@v5`: `latest`, `sha-…`, semver", "раздел 3"],
-                ["Push в registry", "`push: true`, вход в `ghcr.io` через `GITHUB_TOKEN`", "разделы 3–4"],
-                ["Образ можно скачать и запустить", "Публичный пакет GHCR, команды `docker pull` и `docker run`", "разделы 6–7"],
-                ["Отчёт PDF с описанием job'а", "Настоящий документ: код пайплайна, Dockerfile, скриншоты", "разделы 2–8"],
-            ],
-            [42 * mm, 76 * mm, CONTENT_W - 118 * mm],
-        )
-    )
-
-    return build_document(
-        "report-hw2-docker.pdf",
-        "ДЗ 2 — Docker multistage + GHCR",
-        story,
-    )
+    return build_document("report-hw2-docker.pdf", "ДЗ 2 — Docker multistage + GHCR", story)
 
 
 def main() -> None:
@@ -1193,8 +900,7 @@ def main() -> None:
     init_styles()
     for builder in (build_hw1, build_hw2):
         path = builder()
-        size_kb = path.stat().st_size / 1024
-        print(f"OK  {path.name}  ({size_kb:.0f} KB)")
+        print(f"OK  {path.name}  ({path.stat().st_size / 1024:.0f} KB)")
 
 
 if __name__ == "__main__":
