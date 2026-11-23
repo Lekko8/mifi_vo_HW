@@ -1,0 +1,25 @@
+# Build output
+target/
+!target/.gitkeep
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VCS / CI / docs
+.git/
+.gitignore
+.github/
+docs/
+*.md
+mvnw
+mvnw.cmd
+.mvn/
